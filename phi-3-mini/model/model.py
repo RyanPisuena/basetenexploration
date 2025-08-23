@@ -11,6 +11,8 @@ The main methods to implement here are:
 
 See https://truss.baseten.co/quickstart for more.
 """
+import torch
+from transformers import AutoTokenizer, AutoModelForCausalLM
 
 
 class Model:
@@ -22,20 +24,25 @@ class Model:
         # self._config = kwargs["config"]
         # self._secrets = kwargs["secrets"]
         self._model = None
-        self.Tokenizer = None
+        self._tokenizer = None
 
     def load(self):
         # Load model here and assign to self._model.
-        self._model = AutoTokenizerForCausalLLM.from_pretrained(
+        self._model = AutoModelForCausalLM.from_pretrained(
             "microsoft/Phi-3-mini-4k-instruct",
-            device_map=cuda,
+            device_map="cuda",
             torch_dtype="auto"
         )
-        self.Tokenizer = AutoTokenizer.from_pretrained(
+        self._tokenizer = AutoTokenizer.from_pretrained(
             "microsoft/Phi-3-mini-4k-instruct",
         )
 
-
-    def predict(self, model_input):
-        # Run model inference here
-        return model_input
+    def predict(self, request):
+        messages = request.pop("messages")
+        model_inputs = self._tokenizer.apply_chat_template(
+            messages, tokenize=False, add_generation_prompt=True
+        )
+        inputs = self._tokenizer(model_inputs, return_tensors="pt").to("cuda")
+        with torch.no_grad():
+            outputs = self._model.generate(input_ids=inputs["input_ids"], max_length=256)
+        return {"output": self._tokenizer.decode(outputs[0], skip_special_tokens=True)}
